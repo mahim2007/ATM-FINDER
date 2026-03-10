@@ -1,0 +1,288 @@
+<!DOCTYPE html><html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q-Cash ATM Finder</title><style>
+
+body{
+font-family:Arial;
+background:#eef2f7;
+margin:0;
+padding:20px;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+}
+
+.title{
+font-size:30px;
+font-weight:bold;
+margin-bottom:20px;
+}
+
+.searchBox{
+width:100%;
+padding:12px;
+font-size:16px;
+border-radius:8px;
+border:2px solid #e0a800;
+}
+
+.suggestBox{
+background:white;
+border-radius:8px;
+margin-top:5px;
+box-shadow:0 3px 8px rgba(0,0,0,0.1);
+max-height:200px;
+overflow:auto;
+}
+
+.suggestItem{
+padding:12px;
+cursor:pointer;
+border-bottom:1px solid #eee;
+}
+
+.suggestItem:hover{
+background:#f2f2f2;
+}
+
+.filterBtn{
+margin-top:10px;
+padding:10px 14px;
+border:none;
+background:#444;
+color:white;
+border-radius:8px;
+cursor:pointer;
+display:none;
+}
+
+.bankFilter{
+margin-top:10px;
+width:100%;
+padding:10px;
+border-radius:8px;
+border:2px solid #ddd;
+display:none;
+}
+
+.total{
+margin-top:12px;
+font-size:18px;
+font-weight:bold;
+}
+
+.card{
+background:white;
+padding:14px;
+margin-top:10px;
+border-radius:10px;
+box-shadow:0 3px 8px rgba(0,0,0,0.1);
+}
+
+.bank{
+font-weight:bold;
+}
+
+.location{
+color:#0077cc;
+cursor:pointer;
+text-decoration:underline;
+}
+
+.loadMore{
+margin-top:15px;
+padding:12px;
+width:100%;
+border:none;
+background:#e0a800;
+color:white;
+border-radius:8px;
+}
+
+.summary{
+background:white;
+padding:12px;
+margin-top:15px;
+border-radius:8px;
+}
+
+</style></head><body><div class="container"><div class="title">🏧 Q-Cash ATM Finder</div><input id="search" class="searchBox" placeholder="Search district..." onkeyup="suggestDistrict()"><div id="suggestBox" class="suggestBox"></div><button id="filterBtn" class="filterBtn">🏦 Filter by Bank</button>
+
+<select id="bankFilter" class="bankFilter">
+<option value="">All Banks</option>
+</select><div id="total" class="total"></div><div id="results"></div></div><script>
+
+let data=[];
+let districts=[];
+let visibleLimit=50;
+let currentResults=[];
+
+fetch("atm_data.json")
+.then(r=>r.json())
+.then(d=>{
+data=d;
+districts=[...new Set(data.map(a=>a.district))];
+loadBanks();
+});
+
+function loadBanks(){
+
+let banks=[...new Set(data.map(a=>a.bank))].sort();
+
+let select=document.getElementById("bankFilter");
+
+banks.forEach(b=>{
+let opt=document.createElement("option");
+opt.value=b;
+opt.text=b;
+select.appendChild(opt);
+});
+
+}
+
+function suggestDistrict(){
+
+let input=document.getElementById("search").value.toLowerCase();
+let box=document.getElementById("suggestBox");
+
+if(input.length<1){
+box.innerHTML="";
+resetFilter();
+return;
+}
+
+let matches=districts.filter(d=>d.toLowerCase().startsWith(input));
+
+let html="";
+
+matches.forEach(d=>{
+html+=`<div class="suggestItem" onclick="selectDistrict('${d}')">${d}</div>`;
+});
+
+box.innerHTML=html;
+
+}
+
+function selectDistrict(d){
+
+document.getElementById("search").value=d;
+document.getElementById("suggestBox").innerHTML="";
+search();
+
+}
+
+document.getElementById("bankFilter").addEventListener("change",renderResults);
+
+document.getElementById("filterBtn").onclick=function(){
+
+let f=document.getElementById("bankFilter");
+
+f.style.display=(f.style.display==="none")?"block":"none";
+
+};
+
+function resetFilter(){
+
+document.getElementById("filterBtn").style.display="none";
+document.getElementById("bankFilter").style.display="none";
+document.getElementById("bankFilter").value="";
+document.getElementById("results").innerHTML="";
+document.getElementById("total").innerHTML="";
+
+}
+
+document.getElementById("search").addEventListener("keyup",search);
+
+function search(){
+
+let districtInput=document.getElementById("search").value.toLowerCase();
+
+if(districtInput.trim()==""){
+resetFilter();
+return;
+}
+
+visibleLimit=50;
+
+currentResults=data.filter(a=>a.district.toLowerCase().startsWith(districtInput));
+
+if(currentResults.length>0){
+document.getElementById("filterBtn").style.display="inline-block";
+}
+
+renderResults();
+
+}
+
+function renderResults(){
+
+let bank=document.getElementById("bankFilter").value;
+
+let filtered=currentResults.filter(a=>!bank || a.bank==bank);
+
+let html="";
+let total=filtered.length;
+
+let slice=filtered.slice(0,visibleLimit);
+
+slice.forEach(a=>{
+
+let map="https://www.google.com/maps/search/"+encodeURIComponent(a.location);
+
+html+=`
+
+<div class="card">
+
+<div class="bank">🏦 ${a.bank}</div>
+
+<div class="location" onclick="window.open('${map}','_blank')">
+📍 ${a.location}
+</div>
+
+<div>📌 ${a.district}</div>
+
+</div>
+
+`;
+
+});
+
+if(filtered.length>visibleLimit){
+
+html+=`<button class="loadMore" onclick="loadMore()">Load More ATM</button>`;
+
+}
+
+let bankCount={};
+
+filtered.forEach(a=>{
+bankCount[a.bank]=(bankCount[a.bank]||0)+1;
+});
+
+let summary="<div class='summary'><b>Bank-wise ATM Count</b><br>";
+
+for(let b in bankCount){
+summary+=b+" : "+bankCount[b]+" ATM<br>";
+}
+
+summary+="</div>";
+
+document.getElementById("results").innerHTML=html+summary;
+
+document.getElementById("total").innerHTML="🏧 Total ATM Found: "+total;
+
+}
+
+function loadMore(){
+
+visibleLimit+=50;
+renderResults();
+
+}
+
+</script></body>
+</html>
